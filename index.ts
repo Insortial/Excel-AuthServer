@@ -17,8 +17,9 @@ const port = process.env.PORT || 3000;
 //Middlewares
 app.use(cors({
     credentials: true,
-    origin: ['http://localhost:5173']
+    origin: true
 }));
+
 app.use(express.json());
 app.use(cookieParser());
 
@@ -35,7 +36,12 @@ app.post("/token", async (req: Request, res: Response) => {
         const token = await sqlRequest(selectRefreshToken, [refreshToken])
         if(token.length === 0) return res.sendStatus(403)
         jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET as string, (err: any, user: any) => {
-            const accessToken = generateAccessToken({email: user.email, roles: user.roles});
+            const accessToken = generateAccessToken({
+                email: user.email, 
+                name: user.name,
+                phone: user.phone,
+                roles: user.roles
+            });
             res.status(200).json({
                 accessToken: accessToken,
                 success: true
@@ -74,14 +80,14 @@ app.post("/register", async (req: Request, res: Response) => {
     try {
         const salt = await bcrypt.genSalt(10);
         if (!salt) throw Error("Failed to generate salt.");
-        const hashedPassword = await bcrypt.hash(password, salt);
+        const hashedPassword = await bcrypt.hash(password === "" ? "password" : password, salt);
         console.log(hashedPassword);
         if (!hashedPassword) throw Error("Failed to hash password.");
         const findUserRoleQuery = "SELECT roleID FROM Roles WHERE roleName = 'USER'"
         const createUser = `INSERT INTO Users OUTPUT inserted.userID VALUES (?, ?, ?, ?, ?);`
         const setDefaultRole = `INSERT INTO UsersToRoles (roleIDFK, userIDFK) VALUES (?, ?);`
         const userRoleID = (await sqlRequest(findUserRoleQuery))[0].roleID
-        const userID = (await sqlRequest(createUser, [email, firstName, lastName, hashedPassword, phone]))[0].userID
+        const userID = (await sqlRequest(createUser, [email, firstName, lastName, hashedPassword, phone].map((item) => item === "" ? null : item)))[0].userID
         sqlRequest(setDefaultRole, [userRoleID, userID])
         console.log(userRoleID)
         console.log(userID)
@@ -128,12 +134,14 @@ app.post('/login', async (req: Request, res: Response) => {
         return
     }
 
-    const retrieveUserIDAndPass = `SELECT password, userID FROM Users WHERE email = ?`
+    const retrieveUserIDAndPass = `SELECT password, userID, firstName + ' ' + lastName as fullName, phone FROM Users WHERE email = ?`
 
     const result = (await sqlRequest(retrieveUserIDAndPass, [email]))[0]
     console.log(result)
     const userPassword = result.password
     const userID = result.userID
+    const fullName = result.fullName
+    const phone = result.phone
 
     
     
@@ -151,6 +159,8 @@ app.post('/login', async (req: Request, res: Response) => {
             console.log(roles.map(role => role.roleName))
             const payload = {
                 email: email,
+                name: fullName,
+                phone: phone,
                 roles: roles.map(role => role.roleName)
             }
         
@@ -177,6 +187,51 @@ app.post('/login', async (req: Request, res: Response) => {
             });
         }
     })
+})
+
+app.delete("/deleteUser/:id", authenticateToken, async (req: Request, res: Response) => {
+    let id = req.params.id;
+    let parsedID = -1
+    console.log(id)
+
+    if (!isNaN(Number(id))) {
+        parsedID  = parseInt(id, 10); 
+    } else {
+        res.status(400).send('Invalid parameter');
+    }
+
+    try {
+        await sqlRequest(`EXECUTE delete_user ${parsedID}`, [])
+        res.status(200).json({
+            status: "Delete successfully executed"
+        })
+    } catch(err) {
+        console.error("User delete was not successfully completed")
+        res.status(500).send()
+    }
+})
+
+
+app.delete("/logout", async (req: Request, res: Response) => {
+    console.log(req.headers.cookie)
+    const cookies = req.cookies
+    if (!cookies?.jwt) return res.sendStatus(401);
+
+    try {
+        const refreshToken = cookies.jwt;
+        const deleteRefreshToken = "DELETE FROM RefreshTokens WHERE token = ?;"
+        await sqlRequest(deleteRefreshToken, [refreshToken])
+        res.status(200).json({
+            message: "Token successfully deleted",
+            success: true
+        })
+    } catch(error) {
+        console.log(error)
+        res.status(400).json({
+            message: error,
+            success: false
+        })
+    }
 })
 
 app.get('/getUserRoles', authenticateToken, async (req: Request, res: Response) => {
