@@ -24,7 +24,7 @@ app.use(express.json());
 app.use(cookieParser());
 
 app.post("/token", async (req: Request, res: Response) => {
-    console.log(req.headers.cookie)
+    console.log(req.cookies)
     const cookies = req.cookies
     if (!cookies?.jwt) return res.sendStatus(401);
 
@@ -334,7 +334,7 @@ app.post('/changeRole', authenticateToken, async (req: Request, res: Response) =
 })
 
 function generateAccessToken(payload: {[key:string]: any}) {
-    return jwt.sign(payload, process.env.ACCESS_TOKEN_SECRET as string, { expiresIn: "15m"});
+    return jwt.sign(payload, process.env.ACCESS_TOKEN_SECRET as string, { expiresIn: "25m"});
 }
 
 app.listen(port, () => {
