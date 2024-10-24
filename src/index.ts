@@ -12,7 +12,7 @@ import authenticateToken from "./middleware/authenticateToken"
 dotenv.config()
 
 const app: Express = express();
-const port = process.env.PORT || 3000;
+const port = 4000;
 
 //Middlewares
 app.use(cors({
@@ -137,7 +137,10 @@ app.post('/login', async (req: Request, res: Response) => {
     const retrieveUserIDAndPass = `SELECT password, userID, firstName + ' ' + lastName as fullName, phone FROM Users WHERE email = ?`
 
     const result = (await sqlRequest(retrieveUserIDAndPass, [email]))[0]
-    console.log(result)
+    
+    if(result == null)
+        return res.status(401).json({message: "User not found", success: false})
+
     const userPassword = result.password
     const userID = result.userID
     const fullName = result.fullName
