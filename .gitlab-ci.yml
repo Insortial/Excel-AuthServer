@@ -1,6 +1,7 @@
 variables:
   IMAGE_NAME: options-auth
-  IMAGE_TAG: 1.0
+  TEST_TAG: test
+  PROD_TAG: prod
 
 stages:
   - build
@@ -11,17 +12,27 @@ services:
     - name: docker:20.10.16-dind
       alias: docker
 
-build_image: 
+build_image_test: 
   stage: build
+  environment: testing
   before_script:
     - chmod +x ./setup_env.sh
     - ./setup_env.sh
   script:
     - echo "$CI_REGISTRY_PASSWORD" | docker login $CI_REGISTRY -u $CI_REGISTRY_USER --password-stdin
-    - docker build -t $CI_REGISTRY/excelcabinets/auth-server/$IMAGE_NAME:$IMAGE_TAG .
-    - docker push $CI_REGISTRY/excelcabinets/auth-server/$IMAGE_NAME:$IMAGE_TAG
+    - docker build -t $CI_REGISTRY/excelcabinets/auth-server/$IMAGE_NAME:$TEST_TAG .
+    - docker push $CI_REGISTRY/excelcabinets/auth-server/$IMAGE_NAME:$TEST_TAG
 
-
+build_image_prod: 
+  stage: build
+  environment: production
+  before_script:
+    - chmod +x ./setup_env.sh
+    - ./setup_env.sh
+  script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login $CI_REGISTRY -u $CI_REGISTRY_USER --password-stdin
+    - docker build -t $CI_REGISTRY/excelcabinets/auth-server/$IMAGE_NAME:$PROD_TAG .
+    - docker push $CI_REGISTRY/excelcabinets/auth-server/$IMAGE_NAME:$PROD_TAG
 
     
     
