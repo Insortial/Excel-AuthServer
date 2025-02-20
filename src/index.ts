@@ -125,8 +125,8 @@ app.post("/register", async (req: Request, res: Response) => {
 
 app.post('/login', async (req: Request, res: Response) => {
     const { email, password } = req.body
-
-    if(email == "" || password == "") {
+    console.log(email)
+    if(!email || !password) {
         res.status(401).json({
             message: "Please fill out all fields",
             success: false
@@ -238,7 +238,7 @@ app.delete("/logout", async (req: Request, res: Response) => {
 })
 
 app.get('/getUserRoles', authenticateToken, async (req: Request, res: Response) => {
-    const getUserRolesQuery = `SELECT userID, firstName, lastName, roleName
+    const getUserRolesQuery = `SELECT userID, firstName, lastName, email, phone, roleName
                                 FROM USERS AS U
                                 LEFT JOIN UsersToRoles AS UR ON U.userID = UR.userIDFK
                                 LEFT JOIN Roles AS R ON R.roleID = UR.roleIDFK`
@@ -259,7 +259,10 @@ app.get('/getUserRoles', authenticateToken, async (req: Request, res: Response) 
             } else {
                 merged[userID] = {
                     userID: userID,
-                    name: `${row.firstName} ${row.lastName}`,
+                    firstName: row.firstName,
+                    lastName: row.lastName,
+                    email: row.email,
+                    phone: row.phone,
                     roles: row.roleName in roleObject ? {...roleObject,
                         [row.roleName]: true
                     } : roleObject
@@ -337,7 +340,7 @@ app.post('/changeRole', authenticateToken, async (req: Request, res: Response) =
 })
 
 function generateAccessToken(payload: {[key:string]: any}) {
-    return jwt.sign(payload, process.env.ACCESS_TOKEN_SECRET as string, { expiresIn: "25m"});
+    return jwt.sign(payload, process.env.ACCESS_TOKEN_SECRET as string, { expiresIn: "30m"});
 }
 
 app.listen(port, () => {
