@@ -7,28 +7,6 @@ import { sqlRequest } from "../hooks/sqlRequest";
 export const userRequests = Router();
 
 
-userRequests.delete("/user/:id", authenticateToken, validateParamsAsNum(),  async (req: Request, res: Response) => {
-    const { id } = req.params
-    try {
-        await sqlRequest(`EXECUTE delete_user ${id}`, [])
-        res.status(200).json({
-            status: "Delete successfully executed"
-        })
-    } catch(err) {
-        console.error("User delete was not successfully completed")
-        res.status(500).send()
-    }
-})
-
-userRequests.put('/user/:id', authenticateToken, async (req: Request, res: Response) => {
-    
-    try {
-
-    } catch(err) {
-
-    }
-})
-
 userRequests.get('/roles', authenticateToken, async (req: Request, res: Response) => {
     const getUserRolesQuery = `SELECT userID, firstName, lastName, email, phone, roleName
                                 FROM USERS AS U
@@ -109,5 +87,48 @@ userRequests.put('/roles', authenticateToken, async (req: Request, res: Response
             success: false, 
             message: 'Merge failed'
         })
+    }
+})
+
+
+userRequests.delete("/:id", authenticateToken, validateParamsAsNum(),  async (req: Request, res: Response) => {
+    const { id } = req.params
+    try {
+        await sqlRequest(`EXECUTE delete_user ${id}`, [])
+        res.status(200).json({
+            status: "Delete successfully executed"
+        })
+    } catch(err) {
+        console.error("User delete was not successfully completed")
+        res.status(500).send()
+    }
+})
+
+userRequests.get('/:id', authenticateToken, validateParamsAsNum(), async (req: Request, res: Response) => {
+    const { id } = req.params
+
+    try {
+        const retrieveUserQuery = `SELECT * FROM [Users] WHERE userID = ?`
+
+        const response = await sqlRequest(retrieveUserQuery, [id])
+        
+        if(response.length < 1)
+            res.status(500).send("User cannot be found")
+
+        res.status(200).json(response[0])
+    } catch(err) {
+        console.error("User cannot be found")
+        res.status(500).send("User cannot be found")
+    }
+})
+
+userRequests.put('/:id', authenticateToken, async (req: Request, res: Response) => {
+    const { id } = req.params
+    const {  } = req.body
+
+    try {
+
+    } catch(err) {
+
     }
 })
