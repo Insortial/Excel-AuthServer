@@ -1,30 +1,17 @@
-import dotenv from "dotenv"
-import express, { Express, Request, Response } from "express";
-/* const schedule = require('node-schedule'); */
+import { Router } from "express";
+import { Request, Response } from "express";
+import * as jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
-import cors from "cors";
-import * as jwt from "jsonwebtoken"
-import sql from "msnodesqlv8"
-import cookieParser from "cookie-parser"
-import authenticateToken from "./middleware/authenticateToken"
-import validateParamsAsNum from "./middleware/validateParamsAsNum";
+import { sqlRequest } from "../hooks/sqlRequest";
+
+export const authRequests = Router();
 
 
-dotenv.config()
+function generateAccessToken(payload: {[key:string]: any}) {
+    return jwt.sign(payload, process.env.ACCESS_TOKEN_SECRET as string, { expiresIn: "30m"});
+}
 
-const app: Express = express();
-const port = 4000;
-
-//Middlewares
-app.use(cors({
-    credentials: true,
-    origin: true
-}));
-
-app.use(express.json());
-app.use(cookieParser());
-
-app.post("/token", async (req: Request, res: Response) => {
+authRequests.post("/token", async (req: Request, res: Response) => {
     console.log(req.cookies)
     const cookies = req.cookies
     if (!cookies?.jwt) return res.sendStatus(401);
@@ -57,25 +44,7 @@ app.post("/token", async (req: Request, res: Response) => {
     }
 })
 
-const sqlRequest = async (sqlQuery:string, parameters:any[] = []):Promise<{[key:string]:any}[]> => {
-    try {
-        const rows:{[key:string]:any}[] = await new Promise((resolve, reject) => {
-            sql.query(process.env.CONNECTION_STRING as string, sqlQuery, parameters, (err: any, rows: any) => {
-                if(err) {
-                    reject(err)
-                } else {
-                    resolve(rows)
-                }
-            });
-        })
-        return rows
-    } catch(error) {
-        console.log(error)
-        throw error
-    }
-}
-
-app.post("/register", async (req: Request, res: Response) => {
+authRequests.post("/register", async (req: Request, res: Response) => {
     const { email, firstName, lastName, password, phone } = req.body;
     
     try {
@@ -124,7 +93,7 @@ app.post("/register", async (req: Request, res: Response) => {
     }
 });
 
-app.post('/login', async (req: Request, res: Response) => {
+authRequests.post('/login', async (req: Request, res: Response) => {
     const { email, password } = req.body
     console.log(email)
     if(!email || !password) {
@@ -193,20 +162,8 @@ app.post('/login', async (req: Request, res: Response) => {
     })
 })
 
-app.delete("/user/:id", authenticateToken, validateParamsAsNum(),  async (req: Request, res: Response) => {
-    const { id } = req.params
-    try {
-        await sqlRequest(`EXECUTE delete_user ${id}`, [])
-        res.status(200).json({
-            status: "Delete successfully executed"
-        })
-    } catch(err) {
-        console.error("User delete was not successfully completed")
-        res.status(500).send()
-    }
-})
 
-app.delete("/logout", async (req: Request, res: Response) => {
+authRequests.delete("/logout", async (req: Request, res: Response) => {
     console.log(req.headers.cookie)
     const cookies = req.cookies
     if (!cookies?.jwt) return res.sendStatus(401);
@@ -227,111 +184,3 @@ app.delete("/logout", async (req: Request, res: Response) => {
         })
     }
 })
-
-app.get('/getUserRoles', authenticateToken, async (req: Request, res: Response) => {
-    const getUserRolesQuery = `SELECT userID, firstName, lastName, email, phone, roleName
-                                FROM USERS AS U
-                                LEFT JOIN UsersToRoles AS UR ON U.userID = UR.userIDFK
-                                LEFT JOIN Roles AS R ON R.roleID = UR.roleIDFK`
-    const getRoleNamesQuery = `SELECT roleName FROM Roles`
-    
-    try {
-        const roleObject:{[key:string]:boolean} = {}
-        const rows = await sqlRequest(getUserRolesQuery) 
-        const roles = (await sqlRequest(getRoleNamesQuery)).forEach(role => roleObject[role.roleName] = false)
-        console.log(roleObject)
-        const merged:any = {}
-        rows.map((row) => {
-            const userID = row.userID
-
-            if(merged[userID] !== undefined) {
-                if (row.roleName in roleObject)
-                    merged[userID].roles[row.roleName] = true
-            } else {
-                merged[userID] = {
-                    userID: userID,
-                    firstName: row.firstName,
-                    lastName: row.lastName,
-                    email: row.email,
-                    phone: row.phone,
-                    roles: row.roleName in roleObject ? {...roleObject,
-                        [row.roleName]: true
-                    } : roleObject
-                }
-            }
-        })
-
-        res.status(200).json({
-            success: true,
-            response: Object.values(merged)
-        })
-     } catch(err) {
-         console.log(err)
-         res.status(500).json({
-             success: false, 
-             message: 'Merge failed'
-         })
-     }
-})
-
-app.get('/getRoles', authenticateToken, async (req: Request, res: Response) => {
-    const getRolesQuery = `SELECT * FROM Roles`
-    try {
-        const rows = await sqlRequest(getRolesQuery) 
-        res.status(200).json({
-            success: true,
-            response: rows
-        })
-     } catch(err) {
-         console.log(err)
-         res.status(500).json({
-             success: false, 
-             message: 'Unable to obtain roles'
-         })
-     }
-})
-
-app.post('/changeRole', authenticateToken, async (req: Request, res: Response) => {
-    console.log(req.body.newValues)
-    try {
-        for (const user of req.body.newValues) {
-            const { userID, roles } = user;
-            const changeRoleQuery = `MERGE INTO UsersToRoles AS target
-                            USING (
-                                SELECT u.userID, r.roleID
-                                FROM Users u
-                                JOIN Roles r ON r.roleName IN (${roles.map((role:string) => `'${role}'`).join(', ')})
-                                WHERE u.userID = ${userID}
-                            ) AS source (userID, roleID)
-                            ON target.userIDFK = source.userID AND target.roleIDFK = source.roleID
-                            WHEN NOT MATCHED BY TARGET THEN
-                                INSERT (userIDFK, roleIDFK) 
-                                VALUES (source.userID, source.roleID)
-                            WHEN NOT MATCHED BY SOURCE AND target.userIDFK = (
-                                SELECT userID 
-                                FROM Users 
-                                WHERE userID = ${userID}
-                            ) THEN
-                                DELETE;`
-
-            sqlRequest(changeRoleQuery)
-        } 
-        res.status(200).json({
-            success: true
-        })
-    } catch(err) {
-        console.log(err)
-        res.status(500).json({
-            success: false, 
-            message: 'Merge failed'
-        })
-    }
-})
-
-function generateAccessToken(payload: {[key:string]: any}) {
-    return jwt.sign(payload, process.env.ACCESS_TOKEN_SECRET as string, { expiresIn: "30m"});
-}
-
-app.listen(port, () => {
-    console.log(`[server]: Server is running at http://localhost:${port}`);
-});
