@@ -2,11 +2,16 @@ import { Router } from "express";
 import { Request, Response } from "express";
 import authenticateToken from "../middleware/authenticateToken";
 import validateParamsAsNum from "../middleware/validateParamsAsNum";
+import bcrypt from "bcrypt";
 import { sqlRequest } from "../hooks/sqlRequest";
 
 export const userRequests = Router();
 
-
+/**
+ * Retrieves all users and their role assignments
+ * @returns {Array<Object>} List of users with their roles
+ * @throws {AppError} When database query fails
+ */
 userRequests.get('/roles', authenticateToken, async (req: Request, res: Response) => {
     const getUserRolesQuery = `SELECT userID, firstName, lastName, email, phone, roleName
                                 FROM USERS AS U
@@ -53,6 +58,12 @@ userRequests.get('/roles', authenticateToken, async (req: Request, res: Response
      }
 })
 
+/**
+ * Updates user roles
+ * @param {Object} roleData - Updated role assignments
+ * @returns {Object} Update confirmation
+ * @throws {AppError} When role update fails
+ */
 userRequests.put('/roles', authenticateToken, async (req: Request, res: Response) => {
     console.log(req.body.newValues)
     try {
@@ -90,7 +101,12 @@ userRequests.put('/roles', authenticateToken, async (req: Request, res: Response
     }
 })
 
-
+/**
+ * Removes user from system
+ * @param {number} id - User ID to delete
+ * @returns {Object} Deletion confirmation
+ * @throws {AppError} When user deletion fails
+ */
 userRequests.delete("/:id", authenticateToken, validateParamsAsNum(),  async (req: Request, res: Response) => {
     const { id } = req.params
     try {
@@ -104,6 +120,12 @@ userRequests.delete("/:id", authenticateToken, validateParamsAsNum(),  async (re
     }
 })
 
+/**
+ * Retrieves specific user details
+ * @param {number} id - User ID to retrieve
+ * @returns {Object} User details
+ * @throws {AppError} When user not found
+ */
 userRequests.get('/:id', authenticateToken, validateParamsAsNum(), async (req: Request, res: Response) => {
     const { id } = req.params
 
@@ -122,13 +144,61 @@ userRequests.get('/:id', authenticateToken, validateParamsAsNum(), async (req: R
     }
 })
 
-userRequests.put('/:id', authenticateToken, async (req: Request, res: Response) => {
+/**
+ * Updates user details
+ * @param {number} id - User ID to update
+ * @param {Object} userData - Updated user details
+ * @returns {Object} Update confirmation
+ * @throws {AppError} When update fails
+ */
+userRequests.put('/:id', authenticateToken, validateParamsAsNum(), async (req: Request, res: Response) => {
     const { id } = req.params
-    const {  } = req.body
+    const { email, firstName, lastName, phone, password } = req.body
 
     try {
+        // First check if user exists
+        const checkUserQuery = `SELECT COUNT(*) as count FROM [Users] WHERE [userID] = ?`
+        const userExists = await sqlRequest(checkUserQuery, [id])
+        
+        if (userExists[0].count === 0) {
+            return res.status(500).json({
+                success: false,
+                message: "User cannot be found"
+            })
+        }
 
+        // Hash password if provided
+        let hashedPassword: string | undefined
+        if(password) {
+            const salt = await bcrypt.genSalt(10);
+            hashedPassword = await bcrypt.hash(password, salt)
+        }
+
+        const updateUserQuery = `UPDATE [Users]
+                                 SET [email] = ?, [firstName] = ?, [lastName] = ?, [phone] = ? ${password ? ", [password] = ?" : ""}
+                                 WHERE [userID] = ?`
+
+        await sqlRequest(updateUserQuery, [email, firstName, lastName, phone, ...(password ? [hashedPassword] : []), id])
+
+        res.status(200).json({
+            success: true,
+            message: "User updated successfully"
+        })
     } catch(err) {
-
+        console.error("Error updating user:", err)
+        res.status(500).json({
+            success: false,
+            message: "Failed to update user"
+        })
     }
+})
+
+/**
+ * Creates new user account
+ * @param {Object} userData - User details and role assignments
+ * @returns {Object} Creation confirmation
+ * @throws {AppError} When user creation fails
+ */
+userRequests.post("/", authenticateToken, async (req: Request, res: Response) => {
+    // ... existing code ...
 })

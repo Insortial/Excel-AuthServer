@@ -1,5 +1,9 @@
 import { Request, Response, NextFunction } from "express";
 
+/**
+ * Validates URL parameters as numbers
+ * @throws {AppError} When parameters are invalid
+ */
 const validateParamsAsNum = (...numberParams:string[]) => {
     return (req: Request, res: Response, next:NextFunction) => {
         let params = []

@@ -3,12 +3,14 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import app from '../src/index-test'
 
 let token;
+let selectedUserID = 1;
 
 beforeAll(async () => {
     const response = await request(app)
       .post('/login') // Auth route for generating token
       .send({ email: 'renq@excelcabinetsinc.com', password: 'password9902' });
     
+    console.log(response.body)
     token = response.body.accessToken; // Assume the response contains the token
 });
 
@@ -32,11 +34,10 @@ describe('GET /roles', () => {
 
 describe('GET /user/:id', () => {
     it('should return user info given valid userID', async () => {
-        const userID = 1
-        const response = await request(app).get(`/user/${userID}`).set('Authorization', `Bearer ${token}`)
+        const response = await request(app).get(`/user/${selectedUserID}`).set('Authorization', `Bearer ${token}`)
       
         expect(response.status).toBe(200)
-        expect(response.body.userID).toBe(userID)
+        expect(response.body.userID).toBe(selectedUserID)
     })
 
     it('should return error given invalid userID', async () => {
@@ -49,10 +50,34 @@ describe('GET /user/:id', () => {
 
 describe('PUT /user/:id', () => {
     it('should update user info to provided userID', async () => {
+        const initialUser = (await request(app).get(`/user/${selectedUserID}`).set('Authorization', `Bearer ${token}`)).body
+
+        //Update user
+        const newFirstName = 'New NAME'
+        const newLastName = 'New Last Name'
+        const newPhone = '1234567890'
+        await request(app).put((`/user/${selectedUserID}`))
+            .set('Authorization', `Bearer ${token}`)
+            .send({...initialUser, firstName: newFirstName, lastName: newLastName, phone: newPhone, password: null})
+
+        const updatedUser = (await request(app).get(`/user/${selectedUserID}`).set('Authorization', `Bearer ${token}`)).body
+
+        expect(updatedUser.firstName).toBe(newFirstName)
+        expect(updatedUser.lastName).toBe(newLastName)
+        expect(updatedUser.phone).toBe(newPhone)
+
+        //Set user to original values
+        await request(app).put((`/user/${selectedUserID}`))
+            .set('Authorization', `Bearer ${token}`)
+            .send({...initialUser, password: null})
 
     })
 
     it('should return error if provided userID is incorrect', async () => {
-        
+        const response = await request(app).put((`/user/100021233`))
+            .set('Authorization', `Bearer ${token}`)
+            .send({email: "", firstName: "", lastName: "", phone: "", password: null})
+
+        expect(response.status).toBe(500)
     })
 })

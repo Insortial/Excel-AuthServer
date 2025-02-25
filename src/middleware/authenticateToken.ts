@@ -5,7 +5,11 @@ import * as jwt from "jsonwebtoken"
 dotenv.config()
 
 //NOTE: Create Admin verification for this middleware
-function authenticateToken(req: Request, res: Response, next:NextFunction) {
+/**
+ * Authenticates user request
+ * @throws {AppError} When token is invalid
+ */
+export default function authenticateToken(req: Request, res: Response, next: NextFunction) {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1]
     if(token == null) return res.sendStatus(401)
@@ -18,4 +22,3 @@ function authenticateToken(req: Request, res: Response, next:NextFunction) {
         next()
     })
 }
-export default authenticateToken;

@@ -11,6 +11,12 @@ function generateAccessToken(payload: {[key:string]: any}) {
     return jwt.sign(payload, process.env.ACCESS_TOKEN_SECRET as string, { expiresIn: "30m"});
 }
 
+/**
+ * Refreshes access token
+ * @param {string} refreshToken - JWT refresh token
+ * @returns {Object} New access token
+ * @throws {AppError} When refresh token is invalid
+ */
 authRequests.post("/token", async (req: Request, res: Response) => {
     console.log(req.cookies)
     const cookies = req.cookies
@@ -44,6 +50,12 @@ authRequests.post("/token", async (req: Request, res: Response) => {
     }
 })
 
+/**
+ * Registers new user
+ * @param {Object} userData - New user registration details
+ * @returns {Object} Registration confirmation
+ * @throws {AppError} When registration fails
+ */
 authRequests.post("/register", async (req: Request, res: Response) => {
     const { email, firstName, lastName, password, phone } = req.body;
     
@@ -93,6 +105,12 @@ authRequests.post("/register", async (req: Request, res: Response) => {
     }
 });
 
+/**
+ * Authenticates user login
+ * @param {Object} credentials - User login credentials
+ * @returns {Object} Access token
+ * @throws {AppError} When authentication fails
+ */
 authRequests.post('/login', async (req: Request, res: Response) => {
     const { email, password } = req.body
     console.log(email)
@@ -162,7 +180,10 @@ authRequests.post('/login', async (req: Request, res: Response) => {
     })
 })
 
-
+/**
+ * Logs out user
+ * @returns {Object} Logout confirmation
+ */
 authRequests.delete("/logout", async (req: Request, res: Response) => {
     console.log(req.headers.cookie)
     const cookies = req.cookies
